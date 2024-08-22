@@ -145,7 +145,7 @@ impl std::convert::From<linux_loader::cmdline::Error> for StartMicrovmError {
 }
 
 #[cfg_attr(target_arch = "aarch64", allow(unused))]
-fn create_vmm_and_vcpus(
+pub fn create_vmm_and_vcpus(
     instance_info: &InstanceInfo,
     event_manager: &mut EventManager,
     guest_memory: GuestMemoryMmap,
@@ -311,6 +311,24 @@ pub fn build_microvm_for_boot(
         vm_resources.vm_config.vcpu_count,
         cpu_template.kvm_capabilities.clone(),
     )?;
+
+    /// BEGIN NYX-LITE PATCH
+    use kvm_ioctls::Kvm;
+    use kvm_bindings::{
+        KVM_GUESTDBG_ENABLE, KVM_GUESTDBG_USE_SW_BP, kvm_guest_debug_arch, kvm_guest_debug
+    };
+
+    let debug_struct = kvm_guest_debug {
+        // Configure the vcpu so that a KVM_DEBUG_EXIT would be generated
+        // when encountering a software breakpoint during execution
+        control: KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_USE_SW_BP,
+        pad: 0,
+        // Reset all arch-specific debug registers
+        arch: Default::default(),
+    };
+    
+    vcpus[0].kvm_vcpu.fd.set_guest_debug(&debug_struct).unwrap();
+    /// END NYX-LITE PATCH
 
     // The boot timer device needs to be the first device attached in order
     // to maintain the same MMIO address referenced in the documentation
@@ -575,7 +593,7 @@ pub fn build_microvm_from_snapshot(
     Ok(vmm)
 }
 
-fn load_kernel(
+pub fn load_kernel(
     boot_config: &BootConfig,
     guest_memory: &GuestMemoryMmap,
 ) -> Result<GuestAddress, StartMicrovmError> {
@@ -605,7 +623,7 @@ fn load_kernel(
     Ok(entry_addr.kernel_load)
 }
 
-fn load_initrd_from_config(
+pub fn load_initrd_from_config(
     boot_cfg: &BootConfig,
     vm_memory: &GuestMemoryMmap,
 ) -> Result<Option<InitrdConfig>, StartMicrovmError> {
@@ -626,7 +644,7 @@ fn load_initrd_from_config(
 /// * `image` - The initrd image.
 ///
 /// Returns the result of initrd loading
-fn load_initrd<F: Debug>(
+pub fn load_initrd<F: Debug>(
     vm_memory: &GuestMemoryMmap,
     image: &mut F,
 ) -> Result<InitrdConfig, StartMicrovmError>
@@ -708,7 +726,7 @@ pub fn setup_serial_device(
 }
 
 #[cfg(target_arch = "aarch64")]
-fn attach_legacy_devices_aarch64(
+pub fn attach_legacy_devices_aarch64(
     event_manager: &mut EventManager,
     vmm: &mut Vmm,
     cmdline: &mut LoaderKernelCmdline,
@@ -868,7 +886,7 @@ pub fn configure_system_for_boot(
 }
 
 /// Attaches a VirtioDevice device to the device manager and event manager.
-fn attach_virtio_device<T: 'static + VirtioDevice + MutEventSubscriber + Debug>(
+pub fn attach_virtio_device<T: 'static + VirtioDevice + MutEventSubscriber + Debug>(
     event_manager: &mut EventManager,
     vmm: &mut Vmm,
     id: String,
@@ -894,7 +912,7 @@ fn attach_virtio_device<T: 'static + VirtioDevice + MutEventSubscriber + Debug>(
         .map(|_| ())
 }
 
-pub(crate) fn attach_boot_timer_device(
+pub fn attach_boot_timer_device(
     vmm: &mut Vmm,
     request_ts: TimestampUs,
 ) -> Result<(), StartMicrovmError> {
@@ -910,7 +928,7 @@ pub(crate) fn attach_boot_timer_device(
 }
 
 #[cfg(target_arch = "x86_64")]
-fn attach_vmgenid_device(vmm: &mut Vmm) -> Result<(), StartMicrovmError> {
+pub fn attach_vmgenid_device(vmm: &mut Vmm) -> Result<(), StartMicrovmError> {
     let vmgenid = VmGenId::new(&vmm.guest_memory, &mut vmm.resource_allocator)
         .map_err(StartMicrovmError::CreateVMGenID)?;
 
@@ -943,7 +961,7 @@ fn attach_entropy_device(
     )
 }
 
-fn attach_block_devices<'a, I: Iterator<Item = &'a Arc<Mutex<Block>>> + Debug>(
+pub fn attach_block_devices<'a, I: Iterator<Item = &'a Arc<Mutex<Block>>> + Debug>(
     vmm: &mut Vmm,
     cmdline: &mut LoaderKernelCmdline,
     blocks: I,
@@ -979,7 +997,7 @@ fn attach_block_devices<'a, I: Iterator<Item = &'a Arc<Mutex<Block>>> + Debug>(
     Ok(())
 }
 
-fn attach_net_devices<'a, I: Iterator<Item = &'a Arc<Mutex<Net>>> + Debug>(
+pub fn attach_net_devices<'a, I: Iterator<Item = &'a Arc<Mutex<Net>>> + Debug>(
     vmm: &mut Vmm,
     cmdline: &mut LoaderKernelCmdline,
     net_devices: I,

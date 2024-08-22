@@ -308,24 +308,24 @@ pub struct Vmm {
     shutdown_exit_code: Option<FcExitCode>,
 
     // Guest VM core resources.
-    vm: Vm,
+    pub vm: Vm,
     guest_memory: GuestMemoryMmap,
     // Save UFFD in order to keep it open in the Firecracker process, as well.
     // Since this field is never read again, we need to allow `dead_code`.
     #[allow(dead_code)]
     uffd: Option<Uffd>,
-    vcpus_handles: Vec<VcpuHandle>,
+    pub vcpus_handles: Vec<VcpuHandle>,
     // Used by Vcpus and devices to initiate teardown; Vmm should never write here.
     vcpus_exit_evt: EventFd,
 
     // Allocator for guest resrouces
     resource_allocator: ResourceAllocator,
     // Guest VM devices.
-    mmio_device_manager: MMIODeviceManager,
+    pub mmio_device_manager: MMIODeviceManager,
     #[cfg(target_arch = "x86_64")]
-    pio_device_manager: PortIODeviceManager,
+    pub pio_device_manager: PortIODeviceManager,
     #[cfg(target_arch = "x86_64")]
-    acpi_device_manager: ACPIDeviceManager,
+    pub acpi_device_manager: ACPIDeviceManager,
 }
 
 impl Vmm {
@@ -839,6 +839,8 @@ impl Vmm {
         // We send a "Finish" event.  If a VCPU has already exited, this is the only
         // message it will accept... but running and paused will take it as well.
         // It breaks out of the state machine loop so that the thread can be joined.
+        let len = self.vcpus_handles.len();
+        println!("send VcpuEvent::Finish to {len}");
         for (idx, handle) in self.vcpus_handles.iter().enumerate() {
             if let Err(err) = handle.send_event(VcpuEvent::Finish) {
                 error!("Failed to send VcpuEvent::Finish to vCPU {}: {}", idx, err);
@@ -931,8 +933,9 @@ impl MutEventSubscriber for Vmm {
         let event_set = event.event_set();
 
         if source == self.vcpus_exit_evt.as_raw_fd() && event_set == EventSet::IN {
+            println!("@@@VMM MUT EVENT SUBSCRIBER::process");
             // Exit event handling should never do anything more than call 'self.stop()'.
-            let _ = self.vcpus_exit_evt.read();
+            let _ = self.vcpus_exit_evt.read().unwrap();
 
             let exit_code = 'exit_code: {
                 // Query each vcpu for their exit_code.

@@ -112,7 +112,7 @@ fn add_virtio_aml(dsdt_data: &mut Vec<u8>, addr: u64, len: u64, irq: u32) {
 /// Manages the complexities of registering a MMIO device.
 #[derive(Debug)]
 pub struct MMIODeviceManager {
-    pub(crate) bus: crate::devices::Bus,
+    pub bus: crate::devices::Bus,
     pub(crate) id_to_dev_info: HashMap<(DeviceType, String), MMIODeviceInfo>,
     // We create the AML byte code for every VirtIO device in the order we build
     // it, so that we ensure the root block device is appears first in the DSDT.

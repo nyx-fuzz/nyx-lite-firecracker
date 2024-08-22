@@ -90,11 +90,11 @@ pub struct Vcpu {
     /// File descriptor for vcpu to trigger exit event on vmm.
     exit_evt: EventFd,
     /// The receiving end of events channel owned by the vcpu side.
-    event_receiver: Receiver<VcpuEvent>,
+    pub event_receiver: Receiver<VcpuEvent>,
     /// The transmitting end of the events channel which will be given to the handler.
-    event_sender: Option<Sender<VcpuEvent>>,
+    pub event_sender: Option<Sender<VcpuEvent>>,
     /// The receiving end of the responses channel which will be given to the handler.
-    response_receiver: Option<Receiver<VcpuResponse>>,
+    pub response_receiver: Option<Receiver<VcpuResponse>>,
     /// The transmitting end of the responses channel owned by the vcpu side.
     response_sender: Sender<VcpuResponse>,
 }
@@ -271,6 +271,9 @@ impl Vcpu {
                 // - the other vCPUs won't ever exit out of `KVM_RUN`, but they won't consume CPU.
                 // So we pause vCPU0 and send a signal to the emulation thread to stop the VMM.
                 Ok(VcpuEmulation::Stopped) => return self.exit(FcExitCode::Ok),
+		// BEGIN NYX-LITE PATCH
+                Ok(VcpuEmulation::PausedBreakpoint) => {unreachable!();} 
+		// END NYX-LITE PATCH
                 // Emulation errors lead to vCPU exit.
                 Err(_) => return self.exit(FcExitCode::GenericError),
             }
@@ -448,6 +451,70 @@ impl Vcpu {
                 // Notify that this KVM_RUN was interrupted.
                 Ok(VcpuEmulation::Interrupted)
             }
+
+            // BEGIN NYX-LITE PATCH
+            Ok(VcpuExit::Debug(dbg)) => {
+                use kvm_bindings::kvm_guest_debug;
+                use kvm_bindings::KVM_GUESTDBG_ENABLE;
+                use kvm_bindings::KVM_GUESTDBG_USE_SW_BP;
+                use kvm_bindings::KVM_GUESTDBG_INJECT_DB;
+                use kvm_bindings::KVM_GUESTDBG_SINGLESTEP;
+                let rax = self.kvm_vcpu.fd.get_regs().unwrap().rax;
+                info!("caught debug exit {dbg:?}: rax = {rax:?}");
+                let dbg_info = match(dbg.exception){
+                    1 => {
+                        // single step -> reenable breakpoints and continue
+                        kvm_guest_debug {
+                            // Configure the vcpu so that a KVM_DEBUG_EXIT would be generated
+                            // when encountering a software breakpoint during execution
+                            control: KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_USE_SW_BP,
+                            pad: 0,
+                            // Reset all arch-specific debug registers
+                            arch: Default::default(),
+                        }
+                    }
+                    3 => {
+                        if rax == 0x6e79782d6c697465 {
+                            let mut regs = self.kvm_vcpu.fd.get_regs().unwrap();
+                            regs.rip +=1;
+                            self.kvm_vcpu.fd.set_regs(&regs);
+
+                            //hypercall software breakpoint
+                            let dbg_info = kvm_guest_debug {
+                                // Configure the vcpu so that a KVM_DEBUG_EXIT would be generated
+                                // when encountering a software breakpoint during execution
+                                control: KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_USE_SW_BP,
+                                pad: 0,
+                                // Reset all arch-specific debug registers
+                                arch: Default::default(),
+                            };
+                            self.kvm_vcpu.fd.set_guest_debug(&dbg_info).unwrap();
+                            return Ok(VcpuEmulation::PausedBreakpoint);
+                        } else {
+                            //software breakpoint -> disable breakpoint handling and continue in singlestep
+                            kvm_guest_debug {
+                                // Configure the vcpu so that a KVM_DEBUG_EXIT would be generated
+                                // when encountering a software breakpoint during execution
+                                control: KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_INJECT_DB | KVM_GUESTDBG_SINGLESTEP,
+                                pad: 0,
+                                // Reset all arch-specific debug registers
+                                arch: Default::default(),
+                            }
+                        }
+                    }
+                    _ => {
+                        return Err(VcpuError::FaultyKvmExit(format!(
+                            "Unknown Debug event {:?}", dbg
+                        )))
+                    }
+                };
+                
+                self.kvm_vcpu.fd.set_guest_debug(&dbg_info).unwrap();
+                /// END NYX-LITE PATCH
+                Ok(VcpuEmulation::Handled)
+            }
+            // END NYX-LITE PATCH
+
             emulation_result => handle_kvm_exit(&mut self.kvm_vcpu.peripherals, emulation_result),
         }
     }
@@ -527,6 +594,7 @@ fn handle_kvm_exit(
                     )))
                 }
             },
+
             arch_specific_reason => {
                 // run specific architecture emulation.
                 peripherals.run_arch_emulation(arch_specific_reason)
@@ -584,6 +652,8 @@ pub enum VcpuResponse {
     NotAllowed(String),
     /// Vcpu is paused.
     Paused,
+    /// Vcpu was paused by hitting an breakpoint internally
+    PausedBreakpoint,
     /// Vcpu is resumed.
     Resumed,
     /// Vcpu state is saved.
@@ -597,6 +667,7 @@ impl fmt::Debug for VcpuResponse {
         use crate::VcpuResponse::*;
         match self {
             Paused => write!(f, "VcpuResponse::Paused"),
+            PausedBreakpoint => write!(f, "VcpuResponse::PausedBreakpoint"),
             Resumed => write!(f, "VcpuResponse::Resumed"),
             Exited(code) => write!(f, "VcpuResponse::Exited({:?})", code),
             SavedState(_) => write!(f, "VcpuResponse::SavedState"),
@@ -688,6 +759,8 @@ pub enum VcpuEmulation {
     Interrupted,
     /// Stopped.
     Stopped,
+    /// Paused on Hypercall/Dbg breakpoint
+    PausedBreakpoint,
 }
 
 #[cfg(test)]
