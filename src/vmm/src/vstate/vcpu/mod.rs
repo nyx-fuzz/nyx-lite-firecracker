@@ -460,7 +460,6 @@ impl Vcpu {
                 use kvm_bindings::KVM_GUESTDBG_INJECT_DB;
                 use kvm_bindings::KVM_GUESTDBG_SINGLESTEP;
                 let rax = self.kvm_vcpu.fd.get_regs().unwrap().rax;
-                info!("caught debug exit {dbg:?}: rax = {rax:?}");
                 let dbg_info = match(dbg.exception){
                     1 => {
                         // single step -> reenable breakpoints and continue
@@ -474,10 +473,12 @@ impl Vcpu {
                         }
                     }
                     3 => {
-                        if rax == 0x6e79782d6c697465 {
+
+                        const NYX_LITE :u64 = 0x6574696c2d78796e;
+                        if rax == NYX_LITE { // our hypercall
                             let mut regs = self.kvm_vcpu.fd.get_regs().unwrap();
                             regs.rip +=1;
-                            self.kvm_vcpu.fd.set_regs(&regs);
+                            self.kvm_vcpu.fd.set_regs(&regs).unwrap();
 
                             //hypercall software breakpoint
                             let dbg_info = kvm_guest_debug {
@@ -594,7 +595,6 @@ fn handle_kvm_exit(
                     )))
                 }
             },
-
             arch_specific_reason => {
                 // run specific architecture emulation.
                 peripherals.run_arch_emulation(arch_specific_reason)

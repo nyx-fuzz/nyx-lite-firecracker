@@ -19,7 +19,7 @@ pub enum BusError {
 }
 
 #[derive(Debug, Copy, Clone)]
-struct BusRange(u64, u64);
+pub struct BusRange(u64, u64);
 
 impl Eq for BusRange {}
 
@@ -47,7 +47,7 @@ impl PartialOrd for BusRange {
 /// only restriction is that no two devices can overlap in this address space.
 #[derive(Debug, Clone, Default)]
 pub struct Bus {
-    devices: BTreeMap<BusRange, Arc<Mutex<BusDevice>>>,
+    pub devices: BTreeMap<BusRange, Arc<Mutex<BusDevice>>>,
 }
 
 use event_manager::{EventOps, Events, MutEventSubscriber};

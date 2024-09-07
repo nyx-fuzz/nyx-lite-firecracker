@@ -473,7 +473,7 @@ impl<'a> Persist<'a> for MMIODeviceManager {
 
         let mut restore_helper = |device: Arc<Mutex<dyn VirtioDevice>>,
                                   is_vhost_user: bool,
-                                  as_subscriber: Arc<Mutex<dyn MutEventSubscriber>>,
+                                  as_subscriber: Arc<Mutex<dyn MutEventSubscriber + Send>>,
                                   id: &String,
                                   state: &MmioTransportState,
                                   device_info: &MMIODeviceInfo,
