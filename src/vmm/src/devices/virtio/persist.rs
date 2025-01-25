@@ -47,6 +47,8 @@ pub struct QueueState {
     next_avail: Wrapping<u16>,
     next_used: Wrapping<u16>,
 
+    uses_notif_suppression: bool, // NYX-LITE PATCH to allow restoring this field in queues as well.
+
     /// The number of added used buffers since last guest kick
     num_added: Wrapping<u16>,
 }
@@ -66,6 +68,7 @@ impl Persist<'_> for Queue {
             used_ring: self.used_ring.0,
             next_avail: self.next_avail,
             next_used: self.next_used,
+            uses_notif_suppression: self.uses_notif_suppression, // NYX-LITE PATCH
             num_added: self.num_added,
         }
     }
@@ -80,7 +83,7 @@ impl Persist<'_> for Queue {
             used_ring: GuestAddress(state.used_ring),
             next_avail: state.next_avail,
             next_used: state.next_used,
-            uses_notif_suppression: false,
+            uses_notif_suppression: state.uses_notif_suppression, // NYX-LITE PATCH
             num_added: state.num_added,
         })
     }
@@ -171,12 +174,12 @@ impl VirtioDeviceState {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MmioTransportState {
     // The register where feature bits are stored.
-    features_select: u32,
+    pub features_select: u32, // NYX-LITE PATCH
     // The register where features page is selected.
-    acked_features_select: u32,
-    queue_select: u32,
-    device_status: u32,
-    config_generation: u32,
+    pub acked_features_select: u32, // NYX-LITE PATCH
+    pub queue_select: u32, // NYX-LITE PATCH
+    pub device_status: u32, // NYX-LITE PATCH
+    pub config_generation: u32, //NYX-LITE PATCH
 }
 
 /// Auxiliary structure for initializing the transport when resuming from a snapshot.
@@ -250,6 +253,7 @@ mod tests {
                 used_ring: 0,
                 next_avail: Wrapping(0),
                 next_used: Wrapping(0),
+                uses_notif_suppression: false, // NYX-LITE PATCH
                 num_added: Wrapping(0),
             }
         }

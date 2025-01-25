@@ -33,6 +33,7 @@ pub enum FileEngineTypeState {
     Sync,
     /// Async File Engine.
     Async,
+    Cow, // NYX-LITE PATCH
 }
 
 impl From<FileEngineType> for FileEngineTypeState {
@@ -40,6 +41,7 @@ impl From<FileEngineType> for FileEngineTypeState {
         match file_engine_type {
             FileEngineType::Sync => FileEngineTypeState::Sync,
             FileEngineType::Async => FileEngineTypeState::Async,
+            FileEngineType::Cow => FileEngineTypeState::Cow, // NYX-LITE PATCH
         }
     }
 }
@@ -49,6 +51,7 @@ impl From<FileEngineTypeState> for FileEngineType {
         match file_engine_type_state {
             FileEngineTypeState::Sync => FileEngineType::Sync,
             FileEngineTypeState::Async => FileEngineType::Async,
+            FileEngineTypeState::Cow => FileEngineType::Cow, // NYX-LITE PATCH
         }
     }
 }
@@ -61,7 +64,7 @@ pub struct VirtioBlockState {
     cache_type: CacheType,
     root_device: bool,
     disk_path: String,
-    virtio_state: VirtioDeviceState,
+    pub virtio_state: VirtioDeviceState, // NYX-LITE PATCH
     rate_limiter_state: RateLimiterState,
     file_engine_type: FileEngineTypeState,
 }

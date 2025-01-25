@@ -49,14 +49,14 @@ const MMIO_VERSION: u32 = 2;
 pub struct MmioTransport {
     device: Arc<Mutex<dyn VirtioDevice>>,
     // The register where feature bits are stored.
-    pub(crate) features_select: u32,
+    pub features_select: u32,  // NYX-LITE PATCH
     // The register where features page is selected.
     pub(crate) acked_features_select: u32,
-    pub(crate) queue_select: u32,
-    pub(crate) device_status: u32,
-    pub(crate) config_generation: u32,
+    pub queue_select: u32, // NYX-LITE PATCH
+    pub device_status: u32, // NYX-LITE PATCH
+    pub config_generation: u32, // NYX-LITE PATCH
     mem: GuestMemoryMmap,
-    pub(crate) interrupt_status: Arc<AtomicU32>,
+    pub interrupt_status: Arc<AtomicU32>, // NYX-LITE PATCH
     pub is_vhost_user: bool,
 }
 

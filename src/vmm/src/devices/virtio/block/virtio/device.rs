@@ -49,6 +49,8 @@ pub enum FileEngineType {
     /// Use a Sync engine, based on blocking system calls.
     #[default]
     Sync,
+    /// NYX-LITE PATCH Basically the same as Sync, but won't ever write to the backing file, and store deltas in memory instead.
+    Cow, // NYX-LITE PATCH
 }
 
 impl FileEngineType {
@@ -288,7 +290,13 @@ macro_rules! unwrap_async_file_engine_or_return {
             FileEngine::Sync(_) => {
                 error!("The block device doesn't use an async IO engine");
                 return;
+            },
+            // BEGIN NYX-LITE PATCH
+            FileEngine::Cow(_) => {
+                error!("The block device doesn't use an async IO engine");
+                return;
             }
+            // END NYX-LITE PATCH
         }
     };
 }
@@ -558,6 +566,7 @@ impl VirtioBlock {
         match self.disk.file_engine {
             FileEngine::Sync(_) => FileEngineType::Sync,
             FileEngine::Async(_) => FileEngineType::Async,
+            FileEngine::Cow(_) => FileEngineType::Cow, // NYX-LITE PATCH
         }
     }
 

@@ -3,9 +3,12 @@
 
 pub mod async_io;
 pub mod sync_io;
+pub mod cow_io; // NYX-LITE PATCH
 
 use std::fmt::Debug;
 use std::fs::File;
+
+use cow_io::CowFileEngine; // NYX-LITE PATCH
 
 pub use self::async_io::{AsyncFileEngine, AsyncIoError};
 pub use self::sync_io::{SyncFileEngine, SyncIoError};
@@ -57,6 +60,7 @@ pub enum FileEngine<T> {
     #[allow(unused)]
     Async(AsyncFileEngine<T>),
     Sync(SyncFileEngine),
+    Cow(CowFileEngine), // NYX-LITE PATCH
 }
 
 impl<T: Debug> FileEngine<T> {
@@ -75,6 +79,7 @@ impl<T: Debug> FileEngine<T> {
                 AsyncFileEngine::from_file(file).map_err(BlockIoError::Async)?,
             )),
             FileEngineType::Sync => Ok(FileEngine::Sync(SyncFileEngine::from_file(file))),
+            FileEngineType::Cow => Ok(FileEngine::Cow(CowFileEngine::from_file(file))), // NYX-LITE PATCH
         }
     }
 
@@ -82,6 +87,7 @@ impl<T: Debug> FileEngine<T> {
         match self {
             FileEngine::Async(engine) => engine.update_file(file).map_err(BlockIoError::Async)?,
             FileEngine::Sync(engine) => engine.update_file(file),
+            FileEngine::Cow(engine) => engine.update_file(file), // NYX-LITE PATCH
         };
 
         Ok(())
@@ -92,6 +98,7 @@ impl<T: Debug> FileEngine<T> {
         match self {
             FileEngine::Async(engine) => engine.file(),
             FileEngine::Sync(engine) => engine.file(),
+            FileEngine::Cow(engine) => engine.file(), // NYX-LITE PATCH
         }
     }
 
@@ -119,7 +126,17 @@ impl<T: Debug> FileEngine<T> {
                     user_data,
                     error: BlockIoError::Sync(err),
                 }),
+            },            
+            // BEGIN NYX-LITE PATCH
+            // should be exactly the same as the Sync case above
+            FileEngine::Cow(engine) => match engine.read(offset, mem, addr, count) {
+                Ok(count) => Ok(FileEngineOk::Executed(UserDataOk { user_data, count })),
+                Err(err) => Err(UserDataError {
+                    user_data,
+                    error: BlockIoError::Sync(err),
+                }),
             },
+            // ENG NYX-LITE PATCH
         }
     }
 
@@ -148,6 +165,16 @@ impl<T: Debug> FileEngine<T> {
                     error: BlockIoError::Sync(err),
                 }),
             },
+            // BEGIN NYX-LITE PATCH
+            // should be exactly the same as the Sync case above
+            FileEngine::Cow(engine) => match engine.write(offset, mem, addr, count) {
+                Ok(count) => Ok(FileEngineOk::Executed(UserDataOk { user_data, count })),
+                Err(err) => Err(UserDataError {
+                    user_data,
+                    error: BlockIoError::Sync(err),
+                }),
+            },
+            // END NYX-LITE PATCH
         }
     }
 
@@ -173,6 +200,19 @@ impl<T: Debug> FileEngine<T> {
                     error: BlockIoError::Sync(err),
                 }),
             },
+            // BEGIN NYX-LITE PATCH
+            // should be exactly the same as the Sync case above
+            FileEngine::Cow(engine) => match engine.flush() {
+                Ok(_) => Ok(FileEngineOk::Executed(UserDataOk {
+                    user_data,
+                    count: 0,
+                })),
+                Err(err) => Err(UserDataError {
+                    user_data,
+                    error: BlockIoError::Sync(err),
+                }),
+            },
+            // END NYX-LITE PATCH
         }
     }
 
@@ -180,6 +220,7 @@ impl<T: Debug> FileEngine<T> {
         match self {
             FileEngine::Async(engine) => engine.drain(discard).map_err(BlockIoError::Async),
             FileEngine::Sync(_engine) => Ok(()),
+            FileEngine::Cow(_engine) => Ok(()), // NYX-LITE PATCH
         }
     }
 
@@ -189,6 +230,7 @@ impl<T: Debug> FileEngine<T> {
                 engine.drain_and_flush(discard).map_err(BlockIoError::Async)
             }
             FileEngine::Sync(engine) => engine.flush().map_err(BlockIoError::Sync),
+            FileEngine::Cow(engine) => engine.flush().map_err(BlockIoError::Sync), // NYX-LITE PATCH
         }
     }
 }

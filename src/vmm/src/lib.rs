@@ -81,7 +81,7 @@ pub mod acpi;
 pub mod builder;
 /// Types for guest configuration.
 pub mod cpu_config;
-pub(crate) mod device_manager;
+pub mod device_manager;  // NYX-LITE PATCH
 /// Emulates virtual and hardware devices.
 #[allow(missing_docs)]
 pub mod devices;
