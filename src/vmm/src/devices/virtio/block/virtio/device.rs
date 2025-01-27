@@ -21,6 +21,7 @@ use utils::kernel_version::{min_kernel_version_for_io_uring, KernelVersion};
 use utils::u64_to_usize;
 
 use super::io::async_io;
+use super::io::cow_io::CowFileEngine; // NYX-PATCH
 use super::request::*;
 use super::{
     io as block_io, VirtioBlockError, BLOCK_CONFIG_SPACE_SIZE, BLOCK_QUEUE_SIZES, SECTOR_SHIFT,
@@ -677,6 +678,15 @@ impl VirtioDevice for VirtioBlock {
     fn is_activated(&self) -> bool {
         self.device_state.is_activated()
     }
+
+    // BEGIN NYX-LITE PATCH
+    fn as_cow_file_engine(&self) -> Option<&CowFileEngine>{ 
+        if let FileEngine::Cow(c) = &self.disk.file_engine{
+            return Some(c);
+        }
+        return None;
+    }
+    // END NYX-LITE PATCH
 }
 
 impl Drop for VirtioBlock {

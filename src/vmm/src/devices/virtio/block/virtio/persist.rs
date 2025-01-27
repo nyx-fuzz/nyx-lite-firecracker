@@ -6,6 +6,8 @@
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 
+use io::cow_io::CowCache; // NYX-LITE PATCH
+use io::FileEngine;  // NYX-LITE PATCH
 use serde::{Deserialize, Serialize};
 use utils::eventfd::EventFd;
 
@@ -65,6 +67,7 @@ pub struct VirtioBlockState {
     root_device: bool,
     disk_path: String,
     pub virtio_state: VirtioDeviceState, // NYX-LITE PATCH
+    pub cow_state: Arc<CowCache>, // NYX-LITE PATCH
     rate_limiter_state: RateLimiterState,
     file_engine_type: FileEngineTypeState,
 }
@@ -75,6 +78,13 @@ impl Persist<'_> for VirtioBlock {
     type Error = VirtioBlockError;
 
     fn save(&self) -> Self::State {
+        // BEGIN NYX-LITE PATCH
+        let cow_state = if let FileEngine::Cow(cow) = &self.disk.file_engine{
+            cow.snapshot()
+        } else {
+            panic!("Can't snapshot a non-Cow type block device");
+        };
+        // END NYX-LITE PATCH
         // Save device state.
         VirtioBlockState {
             id: self.id.clone(),
@@ -82,6 +92,7 @@ impl Persist<'_> for VirtioBlock {
             cache_type: self.cache_type,
             root_device: self.root_device,
             disk_path: self.disk.file_path.clone(),
+            cow_state, // NYX-LITE PATCH
             virtio_state: VirtioDeviceState::from_device(self),
             rate_limiter_state: self.rate_limiter.save(),
             file_engine_type: FileEngineTypeState::from(self.file_engine_type()),

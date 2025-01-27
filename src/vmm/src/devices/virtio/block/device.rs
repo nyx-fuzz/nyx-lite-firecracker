@@ -217,6 +217,14 @@ impl VirtioDevice for Block {
             Self::VhostUser(b) => b.device_state.is_activated(),
         }
     }
+    // BEGIN NYX-LITE PATCH
+    fn as_cow_file_engine(&self) -> Option<&super::virtio::io::cow_io::CowFileEngine> {
+        match self{
+            Self::Virtio(b) => b.as_cow_file_engine(),
+            _ => None
+        }
+    }
+    // END NYX-LITE PATCH
 }
 
 impl MutEventSubscriber for Block {

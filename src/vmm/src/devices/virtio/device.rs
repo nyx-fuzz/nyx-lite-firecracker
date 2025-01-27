@@ -11,6 +11,7 @@ use std::sync::Arc;
 
 use utils::eventfd::EventFd;
 
+use super::block::virtio::io::cow_io::CowFileEngine; // NYX-LITE PATCH
 use super::mmio::{VIRTIO_MMIO_INT_CONFIG, VIRTIO_MMIO_INT_VRING};
 use super::queue::Queue;
 use super::ActivateError;
@@ -179,6 +180,10 @@ pub trait VirtioDevice: AsAny + Send {
     fn reset(&mut self) -> Option<(EventFd, Vec<EventFd>)> {
         None
     }
+
+    // BEGIN NYX-LITE PATCH
+    fn as_cow_file_engine(&self) -> Option<&CowFileEngine>{ return None; }
+    // END NYX-LITE PATCH
 }
 
 impl fmt::Debug for dyn VirtioDevice {
