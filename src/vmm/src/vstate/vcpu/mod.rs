@@ -11,7 +11,7 @@ use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::sync::{Arc, Barrier};
 use std::{fmt, io, thread};
 
-use kvm_bindings::{KVM_SYSTEM_EVENT_RESET, KVM_SYSTEM_EVENT_SHUTDOWN};
+use kvm_bindings::{kvm_debug_exit_arch, KVM_SYSTEM_EVENT_RESET, KVM_SYSTEM_EVENT_SHUTDOWN};
 use kvm_ioctls::VcpuExit;
 use libc::{c_int, c_void, siginfo_t};
 use log::{error, info, warn};
@@ -72,6 +72,22 @@ pub struct VcpuConfig {
     /// Configuration for vCPU
     pub cpu_config: CpuConfiguration,
 }
+
+// BEGIN NYX-LITE PATCH
+// we copy this struct so it can eb Eq, so that VcpuEmulation can be eq too.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct DebugExitInfo {
+    pub exception: u32,
+    pub pc: u64,
+    pub dr6: u64,
+    pub dr7: u64,
+}
+impl DebugExitInfo{
+    pub fn new(ev: &kvm_debug_exit_arch) -> Self{
+        DebugExitInfo{exception: ev.exception, pc: ev.pc, dr6: ev.dr6, dr7: ev.dr7}
+    }
+}
+// END NYX-LITE PATCH
 
 // Using this for easier explicit type-casting to help IDEs interpret the code.
 type VcpuCell = Cell<Option<*mut Vcpu>>;
@@ -272,7 +288,7 @@ impl Vcpu {
                 // So we pause vCPU0 and send a signal to the emulation thread to stop the VMM.
                 Ok(VcpuEmulation::Stopped) => return self.exit(FcExitCode::Ok),
 		// BEGIN NYX-LITE PATCH
-                Ok(VcpuEmulation::PausedBreakpoint) => {unreachable!();} 
+                Ok(VcpuEmulation::DebugEvent(_)) => {unreachable!();} // NYX-LITE PATCH
 		// END NYX-LITE PATCH
                 // Emulation errors lead to vCPU exit.
                 Err(_) => return self.exit(FcExitCode::GenericError),
@@ -444,78 +460,14 @@ impl Vcpu {
             self.kvm_vcpu.fd.set_kvm_immediate_exit(0);
             return Ok(VcpuEmulation::Interrupted);
         }
-
-        match self.kvm_vcpu.fd.run() {
+        let run_res = self.kvm_vcpu.fd.run(); // NYX-LITE PATCH
+        match run_res {  // NYX-LITE PATCH
             Err(ref err) if err.errno() == libc::EINTR => {
                 self.kvm_vcpu.fd.set_kvm_immediate_exit(0);
                 // Notify that this KVM_RUN was interrupted.
                 Ok(VcpuEmulation::Interrupted)
-            }
-
-            // BEGIN NYX-LITE PATCH
-            Ok(VcpuExit::Debug(dbg)) => {
-                use kvm_bindings::kvm_guest_debug;
-                use kvm_bindings::KVM_GUESTDBG_ENABLE;
-                use kvm_bindings::KVM_GUESTDBG_USE_SW_BP;
-                use kvm_bindings::KVM_GUESTDBG_INJECT_DB;
-                use kvm_bindings::KVM_GUESTDBG_SINGLESTEP;
-                let rax = self.kvm_vcpu.fd.get_regs().unwrap().rax;
-                let dbg_info = match(dbg.exception){
-                    1 => {
-                        // single step -> reenable breakpoints and continue
-                        kvm_guest_debug {
-                            // Configure the vcpu so that a KVM_DEBUG_EXIT would be generated
-                            // when encountering a software breakpoint during execution
-                            control: KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_USE_SW_BP,
-                            pad: 0,
-                            // Reset all arch-specific debug registers
-                            arch: Default::default(),
-                        }
-                    }
-                    3 => {
-
-                        const NYX_LITE :u64 = 0x6574696c2d78796e;
-                        if rax == NYX_LITE { // our hypercall
-                            let mut regs = self.kvm_vcpu.fd.get_regs().unwrap();
-                            regs.rip +=1;
-                            self.kvm_vcpu.fd.set_regs(&regs).unwrap();
-
-                            //hypercall software breakpoint
-                            let dbg_info = kvm_guest_debug {
-                                // Configure the vcpu so that a KVM_DEBUG_EXIT would be generated
-                                // when encountering a software breakpoint during execution
-                                control: KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_USE_SW_BP,
-                                pad: 0,
-                                // Reset all arch-specific debug registers
-                                arch: Default::default(),
-                            };
-                            self.kvm_vcpu.fd.set_guest_debug(&dbg_info).unwrap();
-                            return Ok(VcpuEmulation::PausedBreakpoint);
-                        } else {
-                            //software breakpoint -> disable breakpoint handling and continue in singlestep
-                            kvm_guest_debug {
-                                // Configure the vcpu so that a KVM_DEBUG_EXIT would be generated
-                                // when encountering a software breakpoint during execution
-                                control: KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_INJECT_DB | KVM_GUESTDBG_SINGLESTEP,
-                                pad: 0,
-                                // Reset all arch-specific debug registers
-                                arch: Default::default(),
-                            }
-                        }
-                    }
-                    _ => {
-                        return Err(VcpuError::FaultyKvmExit(format!(
-                            "Unknown Debug event {:?}", dbg
-                        )))
-                    }
-                };
-                
-                self.kvm_vcpu.fd.set_guest_debug(&dbg_info).unwrap();
-                /// END NYX-LITE PATCH
-                Ok(VcpuEmulation::Handled)
-            }
-            // END NYX-LITE PATCH
-
+            },
+            Ok(VcpuExit::Debug(dbg)) => Ok(VcpuEmulation::DebugEvent(DebugExitInfo::new(&dbg))), // NYX-LITE PATCH
             emulation_result => handle_kvm_exit(&mut self.kvm_vcpu.peripherals, emulation_result),
         }
     }
@@ -759,8 +711,8 @@ pub enum VcpuEmulation {
     Interrupted,
     /// Stopped.
     Stopped,
-    /// Paused on Hypercall/Dbg breakpoint
-    PausedBreakpoint,
+    /// paused from breakpoint/single stepping // NYX-LITE PATCH
+    DebugEvent(DebugExitInfo), // NYX-LITE PATCH
 }
 
 #[cfg(test)]

@@ -190,8 +190,10 @@ impl MMIODeviceManager {
                 let io_addr = IoEventAddress::Mmio(
                     device_info.addr + u64::from(crate::devices::virtio::NOTIFY_REG_OFFSET),
                 );
-                vm.register_ioevent(queue_evt, &io_addr, u32::try_from(i).unwrap())
-                    .map_err(MmioError::RegisterIoEvent)?;
+		        // BEGIN NYX-LITE PATCH (remove mmio event handling from the even thread - we'll use vmexits instead
+                //vm.register_ioevent(queue_evt, &io_addr, u32::try_from(i).unwrap())
+                //    .map_err(MmioError::RegisterIoEvent)?;
+                // END NYX-LITE PATCH
             }
             vm.register_irqfd(locked_device.interrupt_evt(), device_info.irqs[0])
                 .map_err(MmioError::RegisterIrqFd)?;

@@ -182,13 +182,16 @@ impl<I: Read + AsRawFd + Send + Debug> SerialWrapper<EventFdTrigger, SerialEvent
         }
 
         if let Some(input) = self.input.as_mut() {
-            let mut out = vec![0u8; avail_cap];
-            let count = input.read(&mut out)?;
-            if count > 0 {
-                self.serial
-                    .raw_input(&out[..count])
-                    .map_err(|_| io::Error::from_raw_os_error(libc::ENOBUFS))?;
-            }
+            // BEGIN NYX-LITE PATCH (make read nonblocking, as this requires non-blocking stdout/stdin, which causes rust to randomly crash
+            let count = 1;
+            //let mut out = vec![0u8; avail_cap];
+            //let count = input.read(&mut out)?;
+            //if count > 0 {
+            //    self.serial
+            //        .raw_input(&out[..count])
+            //        .map_err(|_| io::Error::from_raw_os_error(libc::ENOBUFS))?;
+            //}
+            // END NYX-LITE PATCH
 
             return Ok(count);
         }

@@ -186,7 +186,7 @@ pub fn create_vmm_and_vcpus(
         let vcpus = create_vcpus(&vm, vcpu_count, &vcpus_exit_evt).map_err(Internal)?;
 
         // Make stdout non blocking.
-        set_stdout_nonblocking();
+        //set_stdout_nonblocking(); // NYX-LITE PATCH to address random crashes on big stdout writes
 
         // Serial device setup.
         let serial_device =
@@ -312,10 +312,9 @@ pub fn build_microvm_for_boot(
         cpu_template.kvm_capabilities.clone(),
     )?;
 
-    /// BEGIN NYX-LITE PATCH
-    use kvm_ioctls::Kvm;
+    // BEGIN NYX-LITE PATCH
     use kvm_bindings::{
-        KVM_GUESTDBG_ENABLE, KVM_GUESTDBG_USE_SW_BP, kvm_guest_debug_arch, kvm_guest_debug
+        KVM_GUESTDBG_ENABLE, KVM_GUESTDBG_USE_SW_BP, kvm_guest_debug
     };
 
     let debug_struct = kvm_guest_debug {
@@ -328,7 +327,7 @@ pub fn build_microvm_for_boot(
     };
     
     vcpus[0].kvm_vcpu.fd.set_guest_debug(&debug_struct).unwrap();
-    /// END NYX-LITE PATCH
+    // END NYX-LITE PATCH
 
     // The boot timer device needs to be the first device attached in order
     // to maintain the same MMIO address referenced in the documentation
@@ -717,6 +716,7 @@ pub fn setup_serial_device(
             SerialEventsWrapper {
                 buffer_ready_event_fd: Some(kick_stdin_read_evt),
             },
+            //SerialOut::Sink(io::sink()),
             SerialOut::Stdout(out),
         ),
         input: Some(input),
