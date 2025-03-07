@@ -686,6 +686,10 @@ impl VirtioDevice for VirtioBlock {
         }
         return None;
     }
+
+    fn nyx_handle_queue_event(&mut self) {
+        self.process_virtio_queues();
+    }
     // END NYX-LITE PATCH
 }
 

@@ -183,6 +183,7 @@ pub trait VirtioDevice: AsAny + Send {
 
     // BEGIN NYX-LITE PATCH
     fn as_cow_file_engine(&self) -> Option<&CowFileEngine>{ return None; }
+    fn nyx_handle_queue_event(&mut self){panic!("YOU SHOULD IMPLEMENT THIS FOR DEVICES YOU ACTUALLY USE!")}
     // END NYX-LITE PATCH
 }
 

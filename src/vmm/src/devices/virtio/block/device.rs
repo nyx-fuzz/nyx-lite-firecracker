@@ -224,6 +224,12 @@ impl VirtioDevice for Block {
             _ => None
         }
     }
+    fn nyx_handle_queue_event(&mut self) {
+        match self{
+            Self::Virtio(b) => b.nyx_handle_queue_event(),
+            _ => panic!("Nyx-Lite only supports Virtio Block devices")
+        }
+    }
     // END NYX-LITE PATCH
 }
 

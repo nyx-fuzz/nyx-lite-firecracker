@@ -322,11 +322,14 @@ impl MmioTransport {
                     0x38 => self.update_queue_field(|q| q.size = (v & 0xffff) as u16),
                     0x44 => self.update_queue_field(|q| q.ready = v == 1),
                     // BEGIN NYX-LITE PATCH 
-                    // TODO: this should actually directly call
-                    // the device handler so we no longer have the contet switch
-                    // in here. I suspect that the context switch will
+                    // This directly call
+                    // the device handler so we no longer have the context switch
+                    // to handle this event. I suspect that the context switch will
                     // ocasionally race&corrupt snapshots.
-                    0x50 => self.locked_device().queue_events()[0].write(1).unwrap(), 
+                    0x50 => {
+                        self.locked_device().nyx_handle_queue_event();
+                        //used to go through the queue: self.locked_device().queue_events()[0].write(1).unwrap()
+                    }, 
                     // END NYX-LITE PATCH
                     0x64 => {
                         if self.check_device_status(device_status::DRIVER_OK, 0) {
