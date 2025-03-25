@@ -566,7 +566,9 @@ fn handle_kvm_exit(
             }
             _ => {
                 METRICS.vcpu.failures.inc();
-                error!("Failure during vcpu run: {}", err);
+                if err.errno() != 14 { // NYX-LITE PATCH
+                    error!("Failure during vcpu run: {}", err);
+                } // NYX-LITE PATCH
                 Err(VcpuError::FaultyKvmExit(format!("{}", err)))
             }
         },
